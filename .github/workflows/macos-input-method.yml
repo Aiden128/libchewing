@@ -1,0 +1,33 @@
+name: macOS input method prototype
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['contrib/macos/**', '.github/workflows/macos-input-method.yml', 'capi/**', 'src/**', 'Cargo.toml', 'Cargo.lock', 'CMakeLists.txt']
+  push:
+    branches: ['feature/macos-input-method']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Check toolchain
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal
+          rustup override set 1.88.0
+          cargo --version
+          xcrun swiftc --version
+          cmake --version
+      - name: Build and unit test
+        run: bash contrib/macos/build.sh
+      - name: Package app without losing bundle metadata
+        run: ditto -c -k --keepParent build-macos/ChewingMac.app build-macos/ChewingMac-development.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChewingMac-development-macos-latest
+          path: build-macos/ChewingMac-development.zip
+      - name: Runtime validation remains required
+        run: echo 'A headless build does not validate InputMethodKit registration, candidate windows, or real typing.'
