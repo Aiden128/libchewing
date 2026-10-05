@@ -10,16 +10,16 @@ struct EngineTests {
         defer { try? FileManager.default.removeItem(at: temporary) }
         let engine = try ChewingEngine(dictionaryDirectory: URL(fileURLWithPath: CommandLine.arguments[1]),
                                       userDictionary: temporary.appendingPathComponent("user.dat"))
-        // The upstream README uses w91o3g4 as the example for 台北市.
-        for character in "w91o3g4".unicodeScalars {
+        // DaChen: ㄊ(w) ㄞ(9) second tone(6), ㄅ(1) ㄟ(o) third tone(3), ㄕ(g) fourth tone(4).
+        for character in "w961o3g4".unicodeScalars {
             precondition(engine.handle(route: CM_TEXT, scalar: Int32(character.value)))
             precondition(engine.takeCommit().isEmpty)
         }
-        precondition(engine.composition.text == "台北市")
+        precondition(engine.composition.text == "台北市", "Unexpected preedit: \(engine.composition.text.debugDescription)")
         precondition(engine.flush() == "台北市")
         precondition(engine.flush().isEmpty, "Repeated lifecycle flush must not duplicate commits")
         precondition(engine.composition.text.isEmpty)
-        for character in "w91o3g4".unicodeScalars {
+        for character in "w961o3g4".unicodeScalars {
             _ = engine.handle(route: CM_TEXT, scalar: Int32(character.value))
             _ = engine.takeCommit()
         }
