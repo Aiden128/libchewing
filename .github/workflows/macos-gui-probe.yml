@@ -1,0 +1,49 @@
+name: macOS GUI environment probe
+on:
+  workflow_dispatch:
+  push:
+    branches: ['feature/macos-input-method']
+    paths: ['.github/workflows/macos-gui-probe.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: macos-26
+    timeout-minutes: 5
+    steps:
+      - name: Inspect existing login and automation environment
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo "ImageOS=${ImageOS:-unknown} ImageVersion=${ImageVersion:-unknown}"
+          sw_vers
+          uname -m
+          xcodebuild -version
+          id
+          stat -f 'console uid=%u user=%Su' /dev/console
+          if launchctl print "gui/$(id -u)" >/dev/null 2>&1; then echo 'GUI_BOOTSTRAP=available'; else echo 'GUI_BOOTSTRAP=absent'; fi
+          for process in WindowServer Dock loginwindow; do pgrep -x "$process" || true; done
+          /usr/bin/automationmodetool || true
+          /usr/bin/csrutil status || true
+      - name: Probe APIs without permission requests
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/GUIProbe.swift" <<'SWIFT'
+          import AppKit
+          import ApplicationServices
+          import Carbon
+          print("SESSION=\(String(describing: CGSessionCopyCurrentDictionary()))")
+          print("AX_TRUSTED=\(AXIsProcessTrusted())")
+          print("POST_EVENT_PREFLIGHT=\(CGPreflightPostEventAccess())")
+          print("SCREEN_CAPTURE_PREFLIGHT=\(CGPreflightScreenCaptureAccess())")
+          let sources = TISCreateInputSourceList(nil, true).takeRetainedValue() as NSArray
+          print("INPUT_SOURCE_COUNT=\(sources.count)")
+          SWIFT
+          xcrun swift "$RUNNER_TEMP/GUIProbe.swift"
+      - name: Read existing System Events UI permission
+        timeout-minutes: 1
+        shell: bash
+        run: |
+          # A read-only query. Do not accept prompts or grant any permissions.
+          /usr/bin/osascript -e 'tell application "System Events" to get UI elements enabled'
+          /usr/bin/osascript -e 'tell application "System Events" to get name of every application process whose frontmost is true'
