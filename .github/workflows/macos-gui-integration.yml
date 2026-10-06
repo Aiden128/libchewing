@@ -1,0 +1,37 @@
+name: macOS IMK GUI integration
+on:
+  workflow_dispatch:
+  push:
+    branches: ['feature/macos-input-method']
+    paths: ['contrib/macos/**', '.github/workflows/macos-gui-integration.yml']
+permissions:
+  contents: read
+jobs:
+  gui:
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Build tested development app
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal
+          rustup override set 1.88.0
+          bash contrib/macos/build.sh
+      - name: Test real IMK input in TextEdit
+        timeout-minutes: 4
+        shell: bash
+        run: |
+          mkdir -p "$HOME/Library/Input Methods" gui-evidence
+          ditto build-macos/ChewingMac.app "$HOME/Library/Input Methods/ChewingMac.app"
+          xcrun swiftc -parse-as-library -swift-version 5 contrib/macos/Tests/gui_test.swift -framework AppKit -framework ApplicationServices -framework Carbon -o build-macos/gui-test
+          build-macos/gui-test "$HOME/Library/Input Methods/ChewingMac.app" "$PWD/gui-evidence" 2>&1 | tee gui-evidence/test.log
+      - name: Preserve GUI evidence even when tests fail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChewingMac-GUI-evidence
+          path: gui-evidence/
+          if-no-files-found: warn
